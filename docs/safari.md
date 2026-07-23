@@ -101,16 +101,23 @@ xcodebuild \
     build
 
 mkdir -p "$HOME/Applications"
-ditto \
-    "build/safari-derived-signed/Build/Products/Debug/Dark Reader Development.app" \
-    "$HOME/Applications/Dark Reader Development.app"
-open "$HOME/Applications/Dark Reader Development.app"
+source_app="build/safari-derived-signed/Build/Products/Debug/Dark Reader Development.app"
+installed_app="$HOME/Applications/Dark Reader Development.app"
+
+ditto "$source_app" "$installed_app"
+pluginkit -r \
+    "$source_app/Contents/PlugIns/Dark Reader Development Extension.appex"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+    -u "$source_app"
+open "$installed_app"
 ```
 
 The generated project applies the same team to the app and extension targets.
 The installed app uses a stable path and signed identity, so Safari does not
-require **Allow unsigned extensions** after restart. Keep the team ID and all
-signing material local; do not add them to the generated project or Git.
+require **Allow unsigned extensions** after restart. The two unregister
+commands remove Xcode's transient derived-build registration, preventing
+duplicate entries beside the installed copy. Keep the team ID and all signing
+material local; do not add them to the generated project or Git.
 
 ## Update the extension
 
