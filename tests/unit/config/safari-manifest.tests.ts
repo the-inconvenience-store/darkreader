@@ -1,9 +1,12 @@
+import {execFileSync} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 
+const rootDir = join(__dirname, '../../..');
 const safariManifestPath = join(__dirname, '../../../src/manifest-safari.json');
 const baseManifestPath = join(__dirname, '../../../src/manifest.json');
+const builtManifestPath = join(rootDir, 'build/debug/safari/manifest.json');
 
 async function readJSONIfPresent(path: string): Promise<Record<string, any>> {
     if (!existsSync(path)) {
@@ -13,6 +16,14 @@ async function readJSONIfPresent(path: string): Promise<Record<string, any>> {
 }
 
 describe('Safari manifest', () => {
+    beforeAll(() => {
+        execFileSync(process.execPath, [
+            '--input-type=module',
+            '--eval',
+            "const {default: task} = await import('./tasks/bundle-manifest.js'); await task.run({platforms: {safari: true}, debug: true, watch: false, test: false, log: false, version: false});",
+        ], {cwd: rootDir});
+    });
+
     it('uses a nonpersistent MV2 background page', async () => {
         const base = await readJSONIfPresent(baseManifestPath);
         const safari = await readJSONIfPresent(safariManifestPath);
@@ -34,5 +45,13 @@ describe('Safari manifest', () => {
             'tabs',
             '<all_urls>',
         ]);
+    });
+
+    it('omits unsupported match_about_blank declarations', async () => {
+        const manifest = await readJSONIfPresent(builtManifestPath);
+
+        expect(manifest.content_scripts.every(
+            (contentScript: Record<string, any>) => !('match_about_blank' in contentScript)
+        )).toBe(true);
     });
 });
