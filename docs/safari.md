@@ -11,8 +11,9 @@ configured for App Store distribution.
 - Xcode with the `safari-web-extension-packager` command
 - A supported Node.js version and the repository dependencies
 
-You do not need an Apple Developer Program membership for local testing. Xcode
-can sign both generated targets with **Sign to Run Locally** and **Team: None**.
+You do not need an Apple Developer Program membership for a temporary local
+test. Persistent enablement and settings across Safari restarts require an
+Apple Development identity.
 
 ## Build the extension
 
@@ -58,7 +59,7 @@ find build/safari-app -name '*.xcodeproj' -print
 The generated project is beneath the ignored `build/` directory and must not be
 committed.
 
-## Build and enable the extension
+## Quick unsigned test
 
 1. Open the generated `.xcodeproj` in Xcode.
 2. Select the macOS containing-app target. In **Signing & Capabilities**, set
@@ -78,7 +79,38 @@ the page unchanged; the development build does not bypass that decision.
 Safari intentionally clears **Allow unsigned extensions** whenever Safari
 quits. After each restart, enable that option again and re-enable
 **Dark Reader Development** before testing. This reset is part of Safari's
-unsigned-development security model, not lost Dark Reader state.
+unsigned-development security model. Treat this mode as a functional smoke
+test, not persistence evidence.
+
+## Persistent signed install
+
+With an Apple Development identity already available to Xcode, replace
+`YOUR_TEAM_ID` and run:
+
+```bash
+project_path=$(find build/safari-app -name '*.xcodeproj' -print -quit)
+
+xcodebuild \
+    -project "$project_path" \
+    -scheme "Dark Reader Development" \
+    -configuration Debug \
+    -derivedDataPath build/safari-derived-signed \
+    DEVELOPMENT_TEAM=YOUR_TEAM_ID \
+    CODE_SIGN_STYLE=Automatic \
+    CODE_SIGN_IDENTITY="Apple Development" \
+    build
+
+mkdir -p "$HOME/Applications"
+ditto \
+    "build/safari-derived-signed/Build/Products/Debug/Dark Reader Development.app" \
+    "$HOME/Applications/Dark Reader Development.app"
+open "$HOME/Applications/Dark Reader Development.app"
+```
+
+The generated project applies the same team to the app and extension targets.
+The installed app uses a stable path and signed identity, so Safari does not
+require **Allow unsigned extensions** after restart. Keep the team ID and all
+signing material local; do not add them to the generated project or Git.
 
 ## Update the extension
 
@@ -89,7 +121,9 @@ npm run debug -- --safari
 ```
 
 Build or run the app again in Xcode. The project references the rebuilt
-extension directory, so it normally does not need to be regenerated.
+extension directory, so it normally does not need to be regenerated. For a
+persistent signed install, rerun the signed build and replace the exact app in
+`$HOME/Applications`.
 
 ## Review packager warnings
 
@@ -106,7 +140,7 @@ If the generated project becomes invalid:
 1. Remove only `build/safari-app`.
 2. Confirm that `build/debug/safari` still exists, or rebuild it.
 3. Run the packaging command again.
-4. Reapply the two local-signing selections in Xcode.
+4. Reapply the selected local-signing mode in Xcode.
 
 Do not delete or replace source files, signing identities, or other browser
 build outputs as part of this recovery.

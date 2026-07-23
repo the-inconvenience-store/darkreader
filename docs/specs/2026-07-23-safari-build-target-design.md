@@ -22,9 +22,8 @@ The design traces the following outcomes:
 - `SAFARI-PACKAGE`: A developer can use Apple's supported packager to create a
   local macOS containing app without maintaining generated Xcode files in Git.
 - `SAFARI-LOCAL-RUN`: The packaged extension can be enabled in Safari, darken a
-  light page, and retain settings after it is re-enabled following a Safari
-  restart. Safari resets **Allow unsigned extensions** on quit, so the tester
-  must re-enable unsigned extensions and the development extension first.
+  light page, and retain settings across a Safari restart when the containing
+  app uses an Apple Development signature and a stable installed path.
 - `EXISTING-TARGETS-UNCHANGED`: Adding Safari does not change the selection,
   contents, or verification expectations of existing browser targets.
 
@@ -201,20 +200,25 @@ binary validation.
 
 ### Local run lifecycle
 
-The first-run journey is:
+The persistent first-run journey is:
 
 1. Build the Safari extension target.
 2. Run Apple's packager once.
-3. Open the generated Xcode project.
-4. Select **Sign to Run Locally** with **Team: None** for both the macOS app and
-   extension targets.
-5. Run the containing app.
+3. Build both generated targets with a local Apple Development identity and the
+   same development team.
+4. Install the signed containing app at a stable local path outside `build/`.
+5. Run the installed containing app.
 6. Enable **Dark Reader Development** in Safari's Extensions settings.
 7. Grant website access through Safari.
 
-Apple documents local signing without a development team in its sample setup:
+For the quickest functional smoke test, a developer may instead use **Sign to
+Run Locally** with **Team: None** for both targets and enable **Allow unsigned
+extensions** in Safari. Apple resets that permission on quit, so unsigned mode
+does not satisfy restart or settings-persistence acceptance.
 
-- [Developing a Safari web extension](https://developer.apple.com/documentation/safariservices/developing-a-safari-web-extension)
+Apple documents both running and unsigned-development behavior:
+
+- [Running a Safari web extension](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension)
 
 For subsequent source changes, rebuild `build/debug/safari` and build or run the
 project again in Xcode. Because the project references the build directory, it
@@ -258,8 +262,11 @@ Safari's website permission UI remains the user-visible authority boundary.
 The extension must continue working when access is granted to all websites and
 must fail safely when access is denied.
 
-Generated Xcode and signing material stays under ignored local build paths.
-Release, App Store, and notarization credentials are outside the scope.
+Generated Xcode and build-time signing material stays under ignored local build
+paths. A signed development app may be installed in the developer's user
+Applications directory; its certificate, team selection, profile, and account
+information remain local. Release, App Store, and notarization credentials are
+outside the scope.
 
 ## Evidence Strategy
 
@@ -285,7 +292,8 @@ the packaged Safari smoke test.
 - `xcrun safari-web-extension-packager` successfully generates the macOS
   project from `build/debug/safari`.
 - Packager warnings contain no unresolved critical capability.
-- The generated Xcode project builds with local signing.
+- The generated Xcode project builds with Apple Development signing without
+  storing a team ID or credential in Git.
 
 ### Manual Safari smoke evidence
 
@@ -295,9 +303,8 @@ On a light test page:
 2. The page becomes dark.
 3. Toggling the current site off and on works.
 4. Popup settings can be changed.
-5. Quit and reopen Safari, re-enable **Allow unsigned extensions** and
-   **Dark Reader Development** as required by Safari's development security
-   model, and confirm the setting survives.
+5. Quit and reopen Safari, confirm the signed extension remains enabled, and
+   confirm the setting survives.
 6. Denying page access does not crash the background page or popup.
 
 These checks prove `SAFARI-LOCAL-RUN`; a successful Xcode build alone does not.
