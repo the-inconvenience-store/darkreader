@@ -35,6 +35,9 @@ This will create a `build/release/darkreader-chrome.zip` file for use in a Chrom
 
 You can customize the build process by passing flags to build script. To see all flags, run `npm run build -- --help`.
 
+For the opt-in Safari target and local macOS packaging workflow, see
+[Run the development build in Safari](docs/safari.md).
+
 ### Building with Deno
 
 You can build Dark Reader with an alternative runtime called [Deno](https://deno.land/). For this run `deno:bootstrap` script (e.g., via `npm run deno:bootstrap` or manually copy the command from `package.json`). Then run the same commands described above.
