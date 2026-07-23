@@ -30,7 +30,7 @@ async function patchManifest(platform, debug, watch, test) {
         patched.version_name = 'Debug Plus';
     }
     // Needed to test settings export and CSS theme export via a download
-    if (test || debug) {
+    if ((test || debug) && platform !== PLATFORM.SAFARI) {
         patched.permissions.push('downloads');
     }
     return patched;

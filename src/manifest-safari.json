@@ -1,0 +1,12 @@
+{
+    "background": {
+        "persistent": false,
+        "page": "background/index.html"
+    },
+    "permissions": [
+        "alarms",
+        "storage",
+        "tabs",
+        "<all_urls>"
+    ]
+}

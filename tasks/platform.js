@@ -7,5 +7,6 @@ export const PLATFORM = {
     CHROMIUM_MV3: /** @type {const} */('chrome-mv3'),
     FIREFOX_MV2: /** @type {const} */('firefox'),
     FIREFOX_MV3: /** @type {const} */('firefox-mv3'),
+    SAFARI: /** @type {const} */('safari'),
     THUNDERBIRD: /** @type {const} */('thunderbird'),
 };

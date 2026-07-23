@@ -107,6 +107,7 @@ function getParams(args) {
         '--firefox': PLATFORM.FIREFOX_MV2,
         '--firefox-mv2': PLATFORM.FIREFOX_MV2,
         '--firefox-mv3': PLATFORM.FIREFOX_MV3,
+        '--safari': PLATFORM.SAFARI,
         '--thunderbird': PLATFORM.THUNDERBIRD,
     };
     const platforms = {
@@ -114,6 +115,7 @@ function getParams(args) {
         [PLATFORM.CHROMIUM_MV2_PLUS]: false,
         [PLATFORM.CHROMIUM_MV3]: false,
         [PLATFORM.FIREFOX_MV2]: false,
+        [PLATFORM.SAFARI]: false,
         [PLATFORM.THUNDERBIRD]: false,
     };
     let allPlatforms = true;
@@ -128,7 +130,7 @@ function getParams(args) {
         platforms[PLATFORM.CHROMIUM_MV2_PLUS] = true;
     }
     if (allPlatforms) {
-        Object.keys(platforms).forEach((platform) => platforms[platform] = true);
+        Object.keys(platforms).forEach((platform) => platforms[platform] = platform !== PLATFORM.SAFARI);
     }
 
     // TODO(Anton): remove me
