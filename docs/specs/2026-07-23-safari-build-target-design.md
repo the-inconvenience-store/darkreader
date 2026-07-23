@@ -180,7 +180,7 @@ xcrun safari-web-extension-packager \
     build/debug/safari \
     --project-location build/safari-app \
     --app-name "Dark Reader Development" \
-    --bundle-identifier com.the-inconvenience-store.darkreader.development \
+    --bundle-identifier com.the-inconvenience-store.darkreader.Dark-Reader-Development \
     --macos-only \
     --swift \
     --no-prompt
@@ -193,7 +193,9 @@ local signing selections and must not be overwritten silently.
 The wrapper is generated under the already ignored `build/` directory. It is
 not committed and contains no maintained native functionality. The bundle
 identifier is explicitly development-only and is not an assertion of App Store
-ownership.
+ownership. It matches the containing app identifier Xcode derives from the app
+name so the packager's `.Extension` child identifier passes macOS embedded
+binary validation.
 
 ### Local run lifecycle
 
@@ -371,7 +373,8 @@ high-risk boundaries.
 ### Assumed
 
 - Local development does not require coexistence with another app using
-  `com.the-inconvenience-store.darkreader.development`. If a collision occurs,
+  `com.the-inconvenience-store.darkreader.Dark-Reader-Development`. If a
+  collision occurs,
   the developer must choose another development-only identifier and document
   it locally.
 - The present Safari version supports the MV2 APIs Dark Reader exercises beyond

@@ -34,7 +34,7 @@ xcrun safari-web-extension-packager \
     build/debug/safari \
     --project-location build/safari-app \
     --app-name "Dark Reader Development" \
-    --bundle-identifier com.the-inconvenience-store.darkreader.development \
+    --bundle-identifier com.the-inconvenience-store.darkreader.Dark-Reader-Development \
     --macos-only \
     --swift \
     --no-open \
@@ -44,6 +44,10 @@ xcrun safari-web-extension-packager \
 The command deliberately omits `--copy-resources`, so the generated project
 references `build/debug/safari`. It also omits `--force`, so rerunning the
 command cannot silently replace local Xcode settings.
+
+Keep the documented bundle identifier aligned with the generated app name.
+Apple appends `.Extension` for the embedded target, and macOS requires that
+identifier to be prefixed by the containing app's identifier.
 
 Find the generated project with:
 
