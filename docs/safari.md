@@ -75,6 +75,11 @@ committed.
 Safari remains responsible for website permission. Denying access should leave
 the page unchanged; the development build does not bypass that decision.
 
+Safari intentionally clears **Allow unsigned extensions** whenever Safari
+quits. After each restart, enable that option again and re-enable
+**Dark Reader Development** before testing. This reset is part of Safari's
+unsigned-development security model, not lost Dark Reader state.
+
 ## Update the extension
 
 After changing Dark Reader sources:

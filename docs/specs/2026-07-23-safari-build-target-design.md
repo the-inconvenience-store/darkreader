@@ -22,7 +22,9 @@ The design traces the following outcomes:
 - `SAFARI-PACKAGE`: A developer can use Apple's supported packager to create a
   local macOS containing app without maintaining generated Xcode files in Git.
 - `SAFARI-LOCAL-RUN`: The packaged extension can be enabled in Safari, darken a
-  light page, retain settings, and remain available across Safari restarts.
+  light page, and retain settings after it is re-enabled following a Safari
+  restart. Safari resets **Allow unsigned extensions** on quit, so the tester
+  must re-enable unsigned extensions and the development extension first.
 - `EXISTING-TARGETS-UNCHANGED`: Adding Safari does not change the selection,
   contents, or verification expectations of existing browser targets.
 
@@ -293,7 +295,9 @@ On a light test page:
 2. The page becomes dark.
 3. Toggling the current site off and on works.
 4. Popup settings can be changed.
-5. The setting survives closing and reopening Safari.
+5. Quit and reopen Safari, re-enable **Allow unsigned extensions** and
+   **Dark Reader Development** as required by Safari's development security
+   model, and confirm the setting survives.
 6. Denying page access does not crash the background page or popup.
 
 These checks prove `SAFARI-LOCAL-RUN`; a successful Xcode build alone does not.
