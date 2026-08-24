@@ -66,6 +66,37 @@ describe('Toggling the extension', () => {
         ]);
     });
 
+    it('should stop overriding a native dark theme that appears during first load', async () => {
+        await loadTestPage({
+            '/': multiline(
+                '<!DOCTYPE html>',
+                '<html>',
+                '<head>',
+                '    <style>',
+                '        html, body { background: white; color: black; }',
+                '    </style>',
+                '    <link rel="stylesheet" href="/native-dark.css">',
+                '</head>',
+                '<body>',
+                '    <main>Native dark application</main>',
+                '</body>',
+                '</html>',
+            ),
+            '/native-dark.css': async (_, response) => {
+                await timeout(250);
+                response.setHeader('Content-Type', 'text/css');
+                response.end('html, body { background: rgb(0, 43, 54); color: rgb(238, 232, 213); }');
+            },
+        });
+
+        await expectStyles([
+            ['document', 'background-color', 'rgb(0, 43, 54)'],
+            ['document', 'color', 'rgb(238, 232, 213)'],
+            ['body', 'background-color', 'rgb(0, 43, 54)'],
+            ['body', 'color', 'rgb(238, 232, 213)'],
+        ]);
+    });
+
     it('should follow system color scheme', async () => {
         await loadBasicPage('Automation (color scheme)');
 
