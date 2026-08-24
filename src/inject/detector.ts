@@ -164,23 +164,17 @@ export function runDarkThemeDetector(callback: (hasDarkTheme: boolean) => void, 
 
     if (canCheckForStyle()) {
         runCheck(callback);
-        watchForPageLoad(callback);
         return;
     }
 
     observer = new MutationObserver(() => {
         if (canCheckForStyle()) {
-            observer!.disconnect();
-            observer = null;
+            stopDarkThemeDetector();
             runCheck(callback);
         }
     });
     observer.observe(document.documentElement, {childList: true});
 
-    watchForPageLoad(callback);
-}
-
-function watchForPageLoad(callback: (hasDarkTheme: boolean) => void) {
     if (document.readyState !== 'complete') {
         readyStateListener = () => {
             if (document.readyState === 'complete') {
