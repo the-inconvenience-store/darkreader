@@ -54,4 +54,14 @@ describe('Safari manifest', () => {
             (contentScript: Record<string, any>) => !('match_about_blank' in contentScript)
         )).toBe(true);
     });
+
+    it('omits the provisional fallback script', async () => {
+        const manifest = await readJSONIfPresent(builtManifestPath);
+        const scripts = manifest.content_scripts.flatMap(
+            (contentScript: Record<string, any>) => contentScript.js || []
+        );
+
+        expect(scripts).not.toContain('inject/fallback.js');
+        expect(scripts).toContain('inject/index.js');
+    });
 });

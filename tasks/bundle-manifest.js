@@ -11,7 +11,10 @@ async function patchManifest(platform, debug, watch, test) {
     const manifestExtras = platform === PLATFORM.CHROMIUM_MV2_PLUS ? await readJSON(absolutePath(`src/plus/manifest.json`)) : {};
     const patched = {...manifest, ...manifestPatch, ...manifestExtras};
     if (platform === PLATFORM.SAFARI) {
-        patched.content_scripts.forEach((contentScript) => contentScript.match_about_blank = undefined);
+        patched.content_scripts.forEach((contentScript) => {
+            contentScript.match_about_blank = undefined;
+            contentScript.js = contentScript.js.filter((script) => script !== 'inject/fallback.js');
+        });
     }
     if (debug && platform === PLATFORM.CHROMIUM_MV3) {
         patched.name = 'Dark Reader MV3';
