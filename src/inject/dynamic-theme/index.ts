@@ -4,7 +4,7 @@ import {createTextStyle} from '../../generators/text-style';
 import {forEach, push, toArray} from '../../utils/array';
 import {clearColorCache, getSRGBLightness, parseColorWithCache} from '../../utils/color';
 import {clamp} from '../../utils/math';
-import {isChromium, isEdge, isFirefox, isMobile} from '../../utils/platform';
+import {isChromium, isEdge, isFirefox, isMobile, isLayerRuleSupported} from '../../utils/platform';
 import {throttle} from '../../utils/throttle';
 import {generateUID} from '../../utils/uid';
 import {parsedURLCache} from '../../utils/url';
@@ -21,7 +21,8 @@ import {changeMetaThemeColorWhenAvailable, restoreMetaThemeColor} from './meta-t
 import {modifyBackgroundColor, modifyBorderColor, modifyForegroundColor} from './modify-colors';
 import {getModifiedUserAgentStyle, getModifiedFallbackStyle, cleanModificationCache, getSelectionColor, setFilterSelectorHandler} from './modify-css';
 import {clearColorPalette, getColorPalette, registerVariablesSheet, releaseVariablesSheet} from './palette';
-import {filterSelectors, cleanFilterSelectors, addFilterSelector} from './selectors';
+import {mediaFilterSelectors, cleanFilterSelectors, addFilterSelector} from './selectors';
+import type {FilterSelectorsCollection} from './selectors';
 import type {StyleElement, StyleManager} from './style-manager';
 import {manageStyle, getManageableStyles, cleanLoadingLinks, setIgnoredCSSURLs} from './style-manager';
 import {injectProxy} from './stylesheet-proxy';
@@ -30,13 +31,16 @@ import {watchForStyleChanges, stopWatchingForStyleChanges} from './watch';
 
 export {createFallbackFactory} from './modify-css';
 
+import {createExtendedStaticStyleInjector, removeExtendedFallback, removeExtendedStaticOverrides, reuseStaticStyleOverrides, updateExtendedStaticStyle} from '@plus/dynamic/inject';
+
 declare const __TEST__: boolean;
 declare const __CHROMIUM_MV3__: boolean;
+declare const __PLUS__: boolean;
 const INSTANCE_ID = generateUID();
 const styleManagers = new Map<StyleElement, StyleManager>();
 const adoptedStyleManagers: AdoptedStyleSheetManager[] = [];
 let theme: Theme | null = null;
-let fixes: DynamicThemeFix | null = null;
+let fixes: Partial<DynamicThemeFix> | null = null;
 let isIFrame: boolean | null = null;
 let ignoredImageAnalysisSelectors: string[] = [];
 let ignoredInlineSelectors: string[] = [];
@@ -89,59 +93,105 @@ function stopStylePositionWatchers() {
     nodePositionWatchers.clear();
 }
 
-function injectStaticStyle(style: HTMLStyleElement, prevNode: Node | null, watchAlias: string, callback?: () => void) {
-    const mode = getStyleInjectionMode();
-    if (mode === 'next') {
+interface StaticStyleInjector {
+    begin(): void;
+    inject(id: string, text: string, position: 'beginning' | 'ending', callback?: () => void): CSSStyleSheet;
+}
+
+abstract class StaticStyleInjectorBase implements StaticStyleInjector {
+    begin() {}
+    abstract inject(id: string, text: string, position: 'beginning' | 'ending', callback?: () => void): CSSStyleSheet;
+}
+
+class HeadStaticStyleInjector extends StaticStyleInjectorBase {
+    private lastStyle: HTMLStyleElement | null = null;
+
+    begin() {
+        this.lastStyle = null;
+    }
+
+    inject(id: string, text: string, position: 'beginning' | 'ending', callback?: () => void) {
+        const style = createOrUpdateStyle(`darkreader--${id}`, document);
+        style.textContent = text;
+        const prevNode = position === 'beginning' ? this.lastStyle : document.head.lastChild;
         document.head.insertBefore(style, prevNode ? prevNode.nextSibling : document.head.firstChild);
-        setupNodePositionWatcher(style, watchAlias, callback);
-    } else if (mode === 'away') {
-        injectStyleAway(style);
+        setupNodePositionWatcher(style, id, callback);
+        return style.sheet!;
     }
 }
 
+class AwayStaticStyleInjector extends StaticStyleInjectorBase {
+    inject(id: string, text: string) {
+        const style = createOrUpdateStyle(`darkreader--${id}`, document);
+        style.textContent = text;
+        injectStyleAway(style);
+        return style.sheet!;
+    }
+}
+
+function createStaticStyleInjector() {
+    if (__PLUS__) {
+        return createExtendedStaticStyleInjector(document);
+    }
+    const mode = getStyleInjectionMode();
+    switch (mode) {
+        case 'next': return new HeadStaticStyleInjector();
+        case 'away': return new AwayStaticStyleInjector();
+        default: throw new Error(`Unknown style injection mode ${mode}`);
+    }
+}
+
+let staticStyleInjector: StaticStyleInjector | null;
+
 const scheduleInversionStyleUpdate = throttle(() => {
+    if (__PLUS__) {
+        const cssText = getInversionStyleValue();
+        updateExtendedStaticStyle('invert', cssText);
+        return;
+    }
+
     const invertStyle = document.head?.querySelector<HTMLStyleElement>('.darkreader--invert');
     if (invertStyle) {
-        setInversionStyleValue(invertStyle);
+        invertStyle.textContent = getInversionStyleValue();
     }
     shadowRootsWithOverrides.forEach((root) => {
         const shadowInvertStyle = root.querySelector<HTMLStyleElement>('.darkreader--invert');
         if (shadowInvertStyle) {
-            setInversionStyleValue(shadowInvertStyle);
+            shadowInvertStyle.textContent = getInversionStyleValue();
         }
     });
 });
 
-setFilterSelectorHandler((selector, type) => {
-    const changed = addFilterSelector(selector, type);
+setFilterSelectorHandler((selector, type, media) => {
+    const changed = addFilterSelector(selector, type, media);
     if (changed) {
         scheduleInversionStyleUpdate();
     }
 });
 
-function setInversionStyleValue(invertStyle: HTMLStyleElement) {
+function getInversionStyleValue(): string {
     if (!theme) {
-        return;
+        return '';
     }
 
     const rules: string[] = [];
 
-    const appendRule = (selectors: string[], filter: string | null) => {
+    const appendRule = (target: string[], selectors: string[], filter: string | null) => {
         if (!filter || selectors.length === 0) {
             return;
         }
-        rules.push([
+        target.push([
             `${selectors.join(', ')} {`,
             `    filter: ${filter} !important;`,
             '}',
         ].join('\n'));
     };
 
-    const appendCounterInversion = (selectors: string[]) => {
+    const appendCounterInversion = (target: string[], selectors: string[]) => {
         if (theme!.mode === 0 || selectors.length === 0) {
             return;
         }
-        rules.push([
+        target.push([
             `${selectors.join(', ')} {`,
             `    color: black !important;`,
             '}',
@@ -151,11 +201,11 @@ function setInversionStyleValue(invertStyle: HTMLStyleElement) {
         ].join('\n'));
     };
 
-    const appendInversionCancellation = (selectors: string[]) => {
+    const appendInversionCancellation = (target: string[], selectors: string[]) => {
         if (theme!.mode === 0 || selectors.length === 0) {
             return;
         }
-        rules.push([
+        target.push([
             `${selectors.join(', ')} {`,
             `    filter: none !important;`,
             `    color: var(--darkreader-neutral-text) !important;`,
@@ -166,68 +216,91 @@ function setInversionStyleValue(invertStyle: HTMLStyleElement) {
         ].join('\n'));
     };
 
-    if ((fixes && Array.isArray(fixes.invert) && fixes.invert.length > 0) || filterSelectors.invert.size > 0) {
-        const extraInversionSelectors = [...filterSelectors.invert];
-        const invertSelectors = [...(fixes?.invert ?? []), ...extraInversionSelectors];
+    const buildGroupRules = (media: string): string[] => {
+        const group: string[] = [];
+        const configSelectors = media === '' && fixes && Array.isArray(fixes.invert) ? fixes.invert : [];
+        const filterSelectors = mediaFilterSelectors.get(media);
+
+        if (configSelectors.length > 0 || (filterSelectors && filterSelectors.invert.size > 0)) {
+            buildInversionRules(group, configSelectors, filterSelectors, theme!);
+        }
+        if (filterSelectors && filterSelectors.dim.size > 0) {
+            buildDimRules(group, filterSelectors, theme!);
+        }
+        return group;
+    };
+
+    const buildInversionRules = (group: string[], configSelectors: string[], filterSelectors: FilterSelectorsCollection | undefined, theme: Theme) => {
+        const extraInversionSelectors = filterSelectors ? [...filterSelectors.invert] : [];
+        const invertSelectors = [...configSelectors, ...extraInversionSelectors];
         const invertFilter = getCSSFilterValue({
             ...theme,
             contrast: theme.mode === 0 ? theme.contrast : clamp(theme.contrast - 10, 0, 100),
         });
-        appendRule(invertSelectors, invertFilter);
-        appendCounterInversion(extraInversionSelectors);
-        if (filterSelectors.none.size > 0) {
+        appendRule(group, invertSelectors, invertFilter);
+        appendCounterInversion(group, extraInversionSelectors);
+        if (filterSelectors && filterSelectors.none.size > 0) {
             const noneSelectors = [...filterSelectors.none];
-            appendInversionCancellation(noneSelectors);
-            if (theme.mode === 1) {
+            appendInversionCancellation(group, noneSelectors);
+            if (theme!.mode === 1) {
                 const invertedChildSelectors: string[] = [];
                 noneSelectors.forEach((parent) => {
                     extraInversionSelectors.forEach((child) => invertedChildSelectors.push(`${parent} > ${child}`));
                 });
-                appendRule(invertedChildSelectors, invertFilter);
+                appendRule(group, invertedChildSelectors, invertFilter);
             }
         }
-    }
-    if (filterSelectors.dim.size > 0) {
-        appendRule([...filterSelectors.dim], getCSSFilterValue({
+    };
+
+    const buildDimRules = (group: string[], filterSelectors: FilterSelectorsCollection, theme: Theme) => {
+        appendRule(group, [...filterSelectors.dim], getCSSFilterValue({
             ...theme,
             brightness: clamp(theme.brightness - 10, 5, 200),
             sepia: clamp(theme.sepia + 10, 0, 100),
         }));
-    }
+    };
 
-    invertStyle.textContent = rules.join('\n');
+    const mediaKeys = new Set(['', ...mediaFilterSelectors.keys()]);
+    mediaKeys.forEach((media) => {
+        const group = buildGroupRules(media);
+        if (group.length === 0) {
+            return;
+        }
+        if (media) {
+            rules.push(`@media ${media} {\n${group.join('\n')}\n}`);
+        } else {
+            rules.push(...group);
+        }
+    });
+
+    return rules.join('\n');
 }
 
 function createStaticStyleOverrides() {
-    const fallbackStyle = createOrUpdateStyle('darkreader--fallback', document);
-    fallbackStyle.textContent = getModifiedFallbackStyle(theme!, {strict: true});
-    injectStaticStyle(fallbackStyle, null, 'fallback');
-
-    const userAgentStyle = createOrUpdateStyle('darkreader--user-agent');
-    userAgentStyle.textContent = getModifiedUserAgentStyle(theme!, isIFrame!, theme!.styleSystemControls);
-    injectStaticStyle(userAgentStyle, fallbackStyle, 'user-agent');
-
-    const textStyle = createOrUpdateStyle('darkreader--text');
-    if (theme!.useFont || theme!.textStroke > 0) {
-        textStyle.textContent = createTextStyle(theme!);
-    } else {
-        textStyle.textContent = '';
+    if (!staticStyleInjector) {
+        staticStyleInjector = createStaticStyleInjector();
     }
-    injectStaticStyle(textStyle, userAgentStyle, 'text');
 
-    const invertStyle = createOrUpdateStyle('darkreader--invert');
-    setInversionStyleValue(invertStyle);
-    injectStaticStyle(invertStyle, textStyle, 'invert');
+    if (isLayerRuleSupported) {
+        const layersStyle = createOrUpdateStyle('darkreader-layers', document);
+        layersStyle.textContent = '@layer darkreader';
+        if (document.head.firstChild !== layersStyle) {
+            document.head.insertBefore(layersStyle, document.head.firstChild);
+        }
+    }
 
-    const inlineStyle = createOrUpdateStyle('darkreader--inline');
-    inlineStyle.textContent = getInlineOverrideStyle();
-    injectStaticStyle(inlineStyle, invertStyle, 'inline');
+    staticStyleInjector.begin();
 
-    const variableStyle = createOrUpdateStyle('darkreader--variables');
+    staticStyleInjector.inject('fallback', getModifiedFallbackStyle(theme!, {strict: true}), 'beginning');
+    staticStyleInjector.inject('user-agent', getModifiedUserAgentStyle(theme!, isIFrame!, theme!.styleSystemControls), 'beginning');
+    staticStyleInjector.inject('text', theme!.useFont || theme!.textStroke > 0 ? createTextStyle(theme!) : '', 'beginning');
+    staticStyleInjector.inject('invert', getInversionStyleValue(), 'beginning');
+    staticStyleInjector.inject('inline', getInlineOverrideStyle(), 'beginning');
+
     const selectionColors = theme?.selectionColor ? getSelectionColor(theme) : null;
     const neutralBackgroundColor = modifyBackgroundColor(parseColorWithCache('#ffffff')!, theme!);
     const neutralTextColor = modifyForegroundColor(parseColorWithCache('#000000')!, theme!);
-    variableStyle.textContent = [
+    const variableStyleContent = [
         `:root {`,
         `   --darkreader-neutral-background: ${neutralBackgroundColor};`,
         `   --darkreader-neutral-text: ${neutralTextColor};`,
@@ -235,11 +308,9 @@ function createStaticStyleOverrides() {
         `   --darkreader-selection-text: ${selectionColors?.foregroundColorSelection ?? 'initial'};`,
         `}`,
     ].join('\n');
-    injectStaticStyle(variableStyle, inlineStyle, 'variables', () => registerVariablesSheet(variableStyle.sheet!));
-    registerVariablesSheet(variableStyle.sheet!);
-
-    const rootVarsStyle = createOrUpdateStyle('darkreader--root-vars');
-    injectStaticStyle(rootVarsStyle, variableStyle, 'root-vars');
+    const variableSheet = staticStyleInjector.inject('variables', variableStyleContent, 'beginning', () => registerVariablesSheet(variableSheet));
+    registerVariablesSheet(variableSheet);
+    staticStyleInjector.inject('root-vars', '', 'beginning');
 
     const enableStyleSheetsProxy = !(fixes && fixes.disableStyleSheetsProxy);
     const enableCustomElementRegistryProxy = !(fixes && fixes.disableCustomElementRegistryProxy);
@@ -250,13 +321,11 @@ function createStaticStyleOverrides() {
     } else {
         const proxyScript = createOrUpdateScript('darkreader--proxy');
         proxyScript.append(`(${injectProxy})(${enableStyleSheetsProxy}, ${enableCustomElementRegistryProxy})`);
-        document.head.insertBefore(proxyScript, rootVarsStyle.nextSibling);
+        document.head.insertBefore(proxyScript, document.head.querySelector('.darkreader')?.nextSibling ?? document.head.firstElementChild);
         proxyScript.remove();
     }
 
-    const overrideStyle = createOrUpdateStyle('darkreader--override');
-    overrideStyle.textContent = fixes && fixes.css ? replaceCSSTemplates(fixes.css) : '';
-    injectStaticStyle(overrideStyle, document.head.lastChild, 'override');
+    staticStyleInjector.inject('override', fixes && fixes.css ? replaceCSSTemplates(fixes.css) : '', 'ending');
 }
 
 const shadowRootsWithOverrides = new Set<ShadowRoot>();
@@ -270,7 +339,7 @@ function createShadowStaticStyleOverridesInner(root: ShadowRoot) {
     root.insertBefore(overrideStyle, inlineStyle.nextSibling);
 
     const invertStyle = createOrUpdateStyle('darkreader--invert', root);
-    setInversionStyleValue(invertStyle);
+    invertStyle.textContent = getInversionStyleValue();
     root.insertBefore(invertStyle, overrideStyle.nextSibling);
     shadowRootsWithOverrides.add(root);
 }
@@ -296,6 +365,11 @@ function delayedCreateShadowStaticStyleOverrides(root: ShadowRoot): void {
 }
 
 function createShadowStaticStyleOverrides(root: ShadowRoot) {
+    if (__PLUS__) {
+        reuseStaticStyleOverrides(root);
+        return;
+    }
+
     // The shadow DOM may not be populated yet and the custom element implementation
     // may assume that unpopulated shadow root is empty and inadvertently remove
     // Dark Reader's overrides
@@ -330,11 +404,22 @@ function cleanFallbackStyle() {
     if (fallback) {
         fallback.textContent = '';
     }
+    if (__PLUS__) {
+        removeExtendedFallback();
+    }
+}
+
+function updateRootVars() {
+    if (__PLUS__) {
+        updateExtendedStaticStyle('root-vars', variablesStore.getRootVarsText(theme!));
+        return;
+    }
+
+    const rootVarsStyle = createOrUpdateStyle('darkreader--root-vars');
+    variablesStore.putRootVars(rootVarsStyle, theme!);
 }
 
 function createDynamicStyleOverrides() {
-    cancelRendering();
-
     const allStyles = getManageableStyles(document);
 
     const newManagers = allStyles
@@ -348,12 +433,8 @@ function createDynamicStyleOverrides() {
         });
 
     variablesStore.matchVariablesAndDependents();
-    variablesStore.setOnRootVariableChange(() => {
-        const rootVarsStyle = createOrUpdateStyle('darkreader--root-vars');
-        variablesStore.putRootVars(rootVarsStyle, theme!);
-    });
-    const rootVarsStyle = createOrUpdateStyle('darkreader--root-vars');
-    variablesStore.putRootVars(rootVarsStyle, theme!);
+    variablesStore.setOnRootVariableChange(() => updateRootVars());
+    updateRootVars();
 
     styleManagers.forEach((manager) => manager.render(theme!, ignoredImageAnalysisSelectors!));
     if (loadingStyles.size === 0) {
@@ -429,16 +510,6 @@ function removeManager(element: StyleElement) {
         styleManagers.delete(element);
     }
 }
-
-const throttledRenderAllStyles = throttle((callback?: () => void) => {
-    styleManagers.forEach((manager) => manager.render(theme!, ignoredImageAnalysisSelectors));
-    adoptedStyleManagers.forEach((manager) => manager.render(theme!, ignoredImageAnalysisSelectors));
-    callback && callback();
-});
-
-const cancelRendering = function () {
-    throttledRenderAllStyles.cancel();
-};
 
 function onDOMReady() {
     if (loadingStyles.size === 0) {
@@ -520,8 +591,7 @@ function watchForUpdates() {
             const styleAttr = element.getAttribute('style') || '';
             if (styleAttr.includes('--')) {
                 variablesStore.matchVariablesAndDependents();
-                const rootVarsStyle = createOrUpdateStyle('darkreader--root-vars');
-                variablesStore.putRootVars(rootVarsStyle, theme!);
+                updateRootVars();
             }
         }
     }, (root) => {
@@ -659,21 +729,15 @@ function createPDFOverlay(parent: ParentNode) {
     });
 
     if (isEdge) {
-        overlay.style.top = '';
-        const style = document.createElement('style');
-        style.classList.add('darkreader');
-        style.classList.add('darkreader--pdf-overlay-style');
-        document.head.append(style);
-        style.textContent = [
-            '.darkreader--pdf-overlay {',
-            '    top: 41px;',
-            '}',
-            'html:fullscreen .darkreader--pdf-overlay {',
-            '    top: 0px;',
-            '}',
-        ].join('\n');
+        const updateOffset = () => {
+            const FULLSCREEN_GAP = 10;
+            const isFullscreen = screen.height - window.innerHeight < FULLSCREEN_GAP;
+            overlay.style.top = isFullscreen ? '0px' : '41px';
+        };
+        updateOffset();
+        window.addEventListener('resize', updateOffset);
         cleaners.push(() => {
-            style.remove();
+            window.removeEventListener('resize', updateOffset);
         });
     }
 }
@@ -684,7 +748,12 @@ function tryInvertChromePDF() {
     }
 
     const root = chrome.dom.openOrClosedShadowRoot(document.body);
-    if (!root || !root.querySelector('link[href$="/pdf_embedder.css"]')) {
+    if (
+        !root || (
+            !root.querySelector('link[href$="/pdf_embedder.css"]') &&
+            !root.querySelector('iframe[type="application/pdf"]')
+        )
+    ) {
         return;
     }
 
@@ -726,14 +795,14 @@ export function createOrUpdateDynamicTheme(theme: Theme, dynamicThemeFixes: Dyna
 }
 
 let prevTheme: Theme | null = null;
-let prevFixes: DynamicThemeFix | null = null;
+let prevFixes: Partial<DynamicThemeFix> | null = null;
 
 /**
  * Note: This function should be directly used only in API builds, it is exported by this fle
  * only for use in src/api/enable() for backwards compatibility,
  * extension should use only createOrUpdateDynamicTheme()
  */
-export function createOrUpdateDynamicThemeInternal(themeConfig: Theme, dynamicThemeFixes: DynamicThemeFix | null, iframe: boolean): void {
+export function createOrUpdateDynamicThemeInternal(themeConfig: Theme, dynamicThemeFixes: Partial<DynamicThemeFix> | null, iframe: boolean): void {
     theme = themeConfig;
     fixes = dynamicThemeFixes;
 
@@ -974,6 +1043,10 @@ export function removeDynamicTheme(): void {
 
     cleaners.forEach((clean) => clean());
     cleaners.splice(0);
+
+    if (__PLUS__) {
+        removeExtendedStaticOverrides();
+    }
 }
 
 export function cleanDynamicThemeCache(): void {
@@ -981,11 +1054,11 @@ export function cleanDynamicThemeCache(): void {
     parsedURLCache.clear();
     cleanFilterSelectors();
     removeDocumentVisibilityListener();
-    cancelRendering();
     stopWatchingForUpdates();
     cleanModificationCache();
     clearColorCache();
     releaseVariablesSheet();
     prevTheme = null;
     prevFixes = null;
+    staticStyleInjector = null;
 }

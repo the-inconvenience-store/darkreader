@@ -1,3 +1,55 @@
+# 4.9.135 (November 6, 2026)
+
+- Edge iOS: Update user interface.
+- Edge: Fixed not updating a page when picking a theme.
+- Fixed infinite loop when style element is added and moved immediately.
+- Chrome: Fixed PDF inversion.
+- API: Allow partial theme options.
+- Fixed CSS layers order.
+- Fixed handling SVG color attributes.
+- Fixed Dev Tools detector hints config not being applied after restart.
+
+# 4.9.134 (October 27, 2026)
+
+- Edge: Optimized style injection.
+- Handle @media for inversion selectors (Gmail icons issue).
+- Optimized storing extension's state.
+- Fixed overriding undefined CSS variables.
+- Chrome, Edge: Fixed watching for style changes after toggling the extension.
+- Chrome: Fixed theme detection for Picture-In-Picture mode.
+
+# 4.9.133 (September 24, 2026)
+
+- Fixed HTTP 431 error on Salesforce.
+- Fixed fallback theme being applied until the icon is clicked.
+
+# 4.9.132 (September 15, 2026)
+
+- Chrome, Edge: Fixed errors for proxy server users.
+
+# 4.9.131 (September 14, 2026)
+
+- Edge: Manifest V3 build.
+- Improved responsiveness after computer wakes up.
+- Improved dark theme detection.
+- Fixed infinite loop when attribute change causes DOM rebuilding.
+- Stricter cross-origin request limitations.
+- Optimized document.styleSheets override.
+- Fixed CSS cache memory leak.
+
+# 4.9.130 (September 1, 2026)
+
+- Added support for @container queries.
+- Optimized CSS change hash.
+- One-click code activation.
+- Chrome, Edge: Improved PDF viewer panel theme.
+- Inspect undefined CSS variables with a fallback.
+- Fixed responsiveness when computer wakes up.
+- Fixed Google Sheets cell colors in Dynamic mode.
+- Fixed Data URL error handling.
+- FIxed color scheme state management.
+- Fixed style injection (bloomberg.com issue).
+
 # 4.9.129 (July 14, 2026)
 
 - Improved performance when handling variables references.

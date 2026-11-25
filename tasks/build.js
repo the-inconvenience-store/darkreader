@@ -104,6 +104,7 @@ function getParams(args) {
         '--chrome-mv2': PLATFORM.CHROMIUM_MV2,
         '--chrome-mv3': PLATFORM.CHROMIUM_MV3,
         '--chrome-plus': PLATFORM.CHROMIUM_MV2_PLUS,
+        '--chrome-mv3-plus': PLATFORM.CHROMIUM_MV3_PLUS,
         '--firefox': PLATFORM.FIREFOX_MV2,
         '--firefox-mv2': PLATFORM.FIREFOX_MV2,
         '--firefox-mv3': PLATFORM.FIREFOX_MV3,
@@ -114,6 +115,7 @@ function getParams(args) {
         [PLATFORM.CHROMIUM_MV2]: false,
         [PLATFORM.CHROMIUM_MV2_PLUS]: false,
         [PLATFORM.CHROMIUM_MV3]: false,
+        [PLATFORM.CHROMIUM_MV3_PLUS]: false,
         [PLATFORM.FIREFOX_MV2]: false,
         [PLATFORM.SAFARI]: false,
         [PLATFORM.THUNDERBIRD]: false,
@@ -129,6 +131,10 @@ function getParams(args) {
         platforms[PLATFORM.CHROMIUM_MV2] = false;
         platforms[PLATFORM.CHROMIUM_MV2_PLUS] = true;
     }
+    if (args.includes('--chrome-mv3') && args.includes('--plus')) {
+        platforms[PLATFORM.CHROMIUM_MV3] = false;
+        platforms[PLATFORM.CHROMIUM_MV3_PLUS] = true;
+    }
     if (allPlatforms) {
         Object.keys(platforms).forEach((platform) => platforms[platform] = platform !== PLATFORM.SAFARI);
     }
@@ -141,6 +147,7 @@ function getParams(args) {
 
     if (!pathExistsSync('./src/plus/')) {
         platforms[PLATFORM.CHROMIUM_MV2_PLUS] = false;
+        platforms[PLATFORM.CHROMIUM_MV3_PLUS] = false;
     }
 
     const versionArg = args.find((a) => a.startsWith('--version='));

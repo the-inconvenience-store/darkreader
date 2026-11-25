@@ -79,12 +79,15 @@ function hasBuiltInDarkTheme() {
     return finalLightness < 0.5;
 }
 
-function runCheck(callback: (hasDarkTheme: boolean) => void) {
+function getDeclaredDarkTheme(): boolean | null {
     const colorSchemeMeta = document.querySelector(COLOR_SCHEME_META_SELECTOR) as HTMLMetaElement;
     if (colorSchemeMeta) {
-        const isMetaDark = colorSchemeMeta.content === 'dark' || (colorSchemeMeta.content.includes('dark') && isSystemDarkModeEnabled());
-        callback(isMetaDark);
-        return;
+        const content = colorSchemeMeta.content.toLocaleLowerCase();
+        const isStrictlyDark = content === 'dark' || content === 'only dark';
+        const isStrictlyLight = content === 'light' || content === 'only light';
+        if (isStrictlyDark || isStrictlyLight) {
+            return isStrictlyDark;
+        }
     }
 
     if (
@@ -92,7 +95,15 @@ function runCheck(callback: (hasDarkTheme: boolean) => void) {
         document.body?.classList.contains('dark') ||
         document.documentElement.dataset.theme?.toLocaleLowerCase() === 'dark'
     ) {
-        callback(true);
+        return true;
+    }
+    return null;
+}
+
+function runCheck(callback: (hasDarkTheme: boolean) => void) {
+    const declared = getDeclaredDarkTheme();
+    if (declared != null) {
+        callback(declared);
         return;
     }
 
@@ -129,10 +140,15 @@ let observer: MutationObserver | null;
 let readyStateListener: (() => void) | null;
 
 function canCheckForStyle() {
+    // A declared theme is read from markup, never layout: Firefox paints the page
+    // unstyled when layout is forced before its stylesheets load
+    if (document.body && getDeclaredDarkTheme() != null) {
+        return true;
+    }
     if (!(
         document.body &&
-        document.body.scrollHeight > 0 &&
-        document.body.clientHeight > 0 &&
+        document.body.scrollHeight >= 32 &&
+        document.body.clientHeight >= 32 &&
         document.body.childElementCount > 0 &&
         hasSomeStyle()
     )) {

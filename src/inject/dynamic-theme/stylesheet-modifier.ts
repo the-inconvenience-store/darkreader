@@ -42,26 +42,26 @@ export interface CSSBuilder {
     };
 }
 
-let cssTextCounter = 0;
-const cssTextIds = new Map<string, string>();
-
-function getCSSTextKey(cssText: string) {
-    const existing = cssTextIds.get(cssText);
-    if (existing !== undefined) {
-        return existing;
-    }
-    let n = ++cssTextCounter;
-    let key = '';
-    do {
-        key = String.fromCharCode(n & 0xFFFF) + key;
-        n >>>= 16;
-    } while (n > 0);
-    cssTextIds.set(cssText, key);
-    return key;
-}
-
 export function createStyleSheetModifier(): StyleSheetModifier {
     let renderId = 0;
+
+    let cssTextCounter = 0;
+    const cssTextIds = new Map<string, string>();
+
+    function getCSSTextKey(cssText: string) {
+        const existing = cssTextIds.get(cssText);
+        if (existing !== undefined) {
+            return existing;
+        }
+        let n = ++cssTextCounter;
+        let key = '';
+        do {
+            key = String.fromCharCode(n & 0xFFFF) + key;
+            n >>>= 16;
+        } while (n > 0);
+        cssTextIds.set(cssText, key);
+        return key;
+    }
 
     function getStyleRuleKey(rule: CSSStyleRule) {
         let key = getCSSTextKey(rule.cssText);
@@ -279,7 +279,7 @@ export function createStyleSheetModifier(): StyleSheetModifier {
                 const initialIndex = readyDeclarations.length;
                 let oldDecs: ReadyDeclaration[] = [];
                 if (varDecs.length === 0) {
-                    const tempDec = {property, value: sourceValue, important, sourceValue, varKey};
+                    const tempDec = {property: `--darkreader-placeholder-${varKey}`, value: 'none', important: false, sourceValue, varKey};
                     readyDeclarations.push(tempDec);
                     oldDecs = [tempDec];
                 }
