@@ -14,6 +14,12 @@ async function patchManifest(platform, debug, watch, test) {
     const manifestPatch = isMV2 ? {} : await readJSON(absolutePath(`src/manifest-${platform.replace('-plus', '')}.json`));
     const manifestExtras = isPlus ? await readJSON(absolutePath(`src/plus/manifest.json`)) : {};
     const patched = {...manifest, ...manifestPatch, ...manifestExtras};
+    if (platform === PLATFORM.SAFARI) {
+        patched.content_scripts.forEach((contentScript) => {
+            contentScript.match_about_blank = undefined;
+            contentScript.js = contentScript.js.filter((script) => script !== 'inject/fallback.js');
+        });
+    }
     if (debug && isMV3) {
         patched.name = isPlus ? 'Dark Reader MV3 Plus' : 'Dark Reader MV3';
     }
