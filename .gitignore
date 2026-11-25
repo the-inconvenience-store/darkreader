@@ -44,10 +44,3 @@ deno.json
 # System files
 #-----------------------------------
 .DS_Store
-
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-# bd worktree
-.worktrees/safari-build-target/
