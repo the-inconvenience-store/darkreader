@@ -1,3 +1,7 @@
+# Unreleased
+
+- Fixed pages not receiving a theme when the first theme reply is lost.
+
 # 4.9.135 (November 6, 2026)
 
 - Edge iOS: Update user interface.

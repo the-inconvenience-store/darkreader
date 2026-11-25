@@ -427,6 +427,33 @@ export default class CustomJestEnvironment extends TestEnvironment {
                 setNews: async (news) => await sendToBackground('setNews', news),
                 onDownload: (callback) => onDownloadCallback = callback,
             };
+            this.global.backgroundUtils.dropNextThemeReply = async () => {
+                const target = await this.browser.waitForTarget((t) =>
+                    t.type() === 'service_worker' && new URL(t.url()).host === new URL(this.extensionOrigin).host
+                );
+                const worker = await target.worker();
+                await worker.evaluate((fixtureURL) => {
+                    const original = chrome.tabs.sendMessage;
+                    globalThis.droppedInitialThemeReply = false;
+                    let scriptId;
+                    const identifyDocument = (message, sender) => {
+                        if (sender.url === fixtureURL && sender.frameId === 0 && message.type === 'cs-bg-document-connect') {
+                            scriptId = message.scriptId;
+                        }
+                    };
+                    chrome.runtime.onMessage.addListener(identifyDocument);
+                    chrome.tabs.sendMessage = function (tabId, message, ...args) {
+                        if (scriptId && message.scriptId === scriptId && message.type === 'bg-cs-add-dynamic-theme') {
+                            globalThis.droppedInitialThemeReply = true;
+                            chrome.tabs.sendMessage = original;
+                            chrome.runtime.onMessage.removeListener(identifyDocument);
+                            return Promise.resolve();
+                        }
+                        return original.call(this, tabId, message, ...args);
+                    };
+                }, `http://localhost:${TEST_SERVER_PORT}/`);
+                return () => worker.evaluate(() => globalThis.droppedInitialThemeReply);
+            };
 
             this.global.pageUtils = {
                 emulateColorScheme: async (colorScheme) => await sendToPage('firefox-emulateColorScheme', colorScheme),

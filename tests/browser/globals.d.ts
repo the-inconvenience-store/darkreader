@@ -28,6 +28,7 @@ declare global {
         changeChromeStorage: (region: 'local' | 'sync' | 'session', data: {[key: string]: any}) => Promise<void>;
         getColorScheme: () => Promise<ColorScheme>;
         getChromeStorage: (region: 'local' | 'sync' | 'session', keys: string[]) => Promise<{[key: string]: any}>;
+        dropNextThemeReply: () => Promise<() => Promise<boolean>>;
         getManifest: () => Promise<chrome.runtime.Manifest>;
         setNews: (news: News[] | null) => Promise<void>;
         onDownload: (callback: (p: {ok: boolean}) => void) => void;

@@ -151,13 +151,13 @@ export default class TabManager {
 
                     TabManager.stateManager.loadState().then(() => {
                         const existingFrame = TabManager.tabs[tabId]?.[frameId!];
-                        if (existingFrame && existingFrame.scriptId === scriptId && existingFrame.documentId === documentId) {
-                            return;
+                        if (existingFrame?.scriptId !== scriptId || existingFrame.documentId !== documentId) {
+                            TabManager.addFrame(tabId, frameId!, documentId, scriptId, url, isTopFrame);
+                            TabManager.stateManager.saveState();
                         }
-                        TabManager.addFrame(tabId, frameId!, documentId, scriptId, url, isTopFrame);
                         const topFrameHasDarkTheme = isTopFrame ? false : TabManager.tabs[tabId]?.[0]?.darkThemeDetected;
+                        // A registered document can reconnect if it never received its initial theme.
                         reply(tabURL, url, isTopFrame, topFrameHasDarkTheme);
-                        TabManager.stateManager.saveState();
                     });
                     break;
                 }
